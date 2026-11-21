@@ -38,19 +38,21 @@ WEATHER_SOURCES = ("open-meteo", "met.no")   # preferred forecast source; the ot
 
 
 def config_dir() -> Path:
+    """Settings folder: ~/.config/rbsb-weather on Linux; on Windows see osplat.py
+    (next to RBSB-Weather.exe in the portable build)."""
     env = os.environ.get("RBSB_WEATHER_CONFIG_DIR")
     if env:
         return Path(env)
-    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(Path.home(), ".config")
-    return Path(base) / APP_ID
+    from .osplat import config_base
+    return config_base()
 
 
 def cache_dir() -> Path:
     env = os.environ.get("RBSB_WEATHER_CACHE_DIR")
     if env:
         return Path(env)
-    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(Path.home(), ".cache")
-    return Path(base) / APP_ID
+    from .osplat import cache_base
+    return cache_base()
 
 
 def autostart_path() -> Path:

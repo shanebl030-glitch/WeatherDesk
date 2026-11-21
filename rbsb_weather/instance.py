@@ -45,7 +45,8 @@ LEGACY_ATTEMPTS = 3      # a busy-but-current copy answers a retry; a legacy cop
 def server_name() -> str:
     # RBSB_WEATHER_INSTANCE lets the test suite use its own name, so running
     # the tests never interferes with a real RBSB-Weather you have open.
-    return os.environ.get("RBSB_WEATHER_INSTANCE") or f"{APP_ID}-{os.getuid()}"
+    from .osplat import user_id
+    return os.environ.get("RBSB_WEATHER_INSTANCE") or f"{APP_ID}-{user_id()}"
 
 
 def parse_version(v: str) -> Optional[tuple[int, ...]]:
@@ -148,7 +149,11 @@ def peer_hung_up(fd: int) -> bool:
 
 
 def socket_owner_pids(path: str) -> list[int]:
-    """PIDs (same user, not us) holding the unix socket bound at `path`."""
+    """PIDs (same user, not us) holding the unix socket bound at `path`. Linux only: on
+    Windows (no /proc) this is always empty, and hand-over relies on the running copy
+    quitting by itself when asked, which every version that exists on Windows does."""
+    if not os.path.exists("/proc/net/unix"):
+        return []
     inodes: set[str] = set()
     try:
         with open("/proc/net/unix", encoding="utf-8", errors="replace") as f:

@@ -9,6 +9,7 @@ import argparse
 import logging
 import logging.handlers
 import sys
+import time
 
 from . import APP_ID, APP_NAME, AUTHOR_CREDIT, __version__
 
@@ -31,7 +32,18 @@ def _setup_logging(verbose: bool) -> None:
     install_log_redaction()
 
 
+def _console_safe() -> None:
+    """A windowed Windows program (the portable RBSB-Weather.exe) has no console:
+    sys.stdout and sys.stderr are None, and any print() would crash it. Send that output
+    nowhere instead (the log file still records everything)."""
+    import os
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
+
+
 def main(argv: list[str] | None = None) -> int:
+    _console_safe()
     ap = argparse.ArgumentParser(prog=APP_ID, description=f"{APP_NAME} – desktop weather. {AUTHOR_CREDIT}")
     ap.add_argument("--version", action="version", version=f"{APP_NAME} {__version__} – {AUTHOR_CREDIT}")
     ap.add_argument("--minimized", action="store_true", help="start hidden in the system tray")
@@ -49,6 +61,13 @@ def main(argv: list[str] | None = None) -> int:
 
     _setup_logging(args.verbose)
     log = logging.getLogger("rbsb_weather")
+    try:
+        import platform
+        from .storage import config_dir
+        log.info("RBSB-Weather %s starting on %s (Python %s); settings in %s", __version__,
+                 platform.platform(terse=True), platform.python_version(), config_dir())
+    except Exception:
+        pass
     try:   # remember "use small packets" for servers behind a broken route, across restarts
         from . import net
         from .storage import cache_dir
@@ -115,7 +134,16 @@ def main(argv: list[str] | None = None) -> int:
     # request is always answered promptly by the event loop below.
     QLocalServer.removeServer(name)   # clear a stale socket left by a crash or the old copy
     server = QLocalServer()
-    if not server.listen(name):
+    ok = server.listen(name)
+    # Windows: an older copy that just handed over can hold its named pipe for a moment
+    # after quitting; wait for it (up to 3 s) instead of running without the channel
+    end = time.monotonic() + 3.0
+    while not ok and time.monotonic() < end:
+        app.processEvents()
+        time.sleep(0.1)
+        QLocalServer.removeServer(name)
+        ok = server.listen(name)
+    if not ok:
         log.warning("single-instance server unavailable: %s", server.errorString())
     if carried:
         win.statusBar().showMessage(

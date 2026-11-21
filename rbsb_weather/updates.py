@@ -64,15 +64,24 @@ TIMEOUT_S = 20.0
 
 MAX_RELEASE_BYTES = 1024 * 1024
 MAX_SUMS_BYTES = 64 * 1024
-MAX_DEB_BYTES = 100 * 1024 * 1024
+MAX_DEB_BYTES = 300 * 1024 * 1024     # the Windows portable zip (Python and Qt inside) is the larger
 MAX_NOTES_CHARS = 20_000
 CHUNK = 64 * 1024
 
 _VERSION_RE = re.compile(r"\d{1,4}(\.\d{1,4}){0,3}")
-_DEB_RE = re.compile(r"rbsb-weather_\d{1,4}(\.\d{1,4}){0,3}_all\.deb")
+_DEB_RE = re.compile(r"rbsb-weather_\d{1,4}(\.\d{1,4}){0,3}_all\.deb"
+                     r"|rbsb-weather-\d{1,4}(\.\d{1,4}){0,3}-windows-portable\.zip")
 _GITHUB_HOSTS = ("github.com", "api.github.com")
 _LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
 DEB_MAGIC = b"!<arch>\ndebian-binary"
+ZIP_MAGIC = b"PK\x03\x04"
+
+
+def package_name(version: str, windows: Optional[bool] = None) -> str:
+    """The release file this system installs: the .deb on Linux, the portable zip on Windows."""
+    from .osplat import IS_WINDOWS
+    win = IS_WINDOWS if windows is None else windows
+    return f"rbsb-weather-{version}-windows-portable.zip" if win else f"rbsb-weather_{version}_all.deb"
 
 
 class UpdateError(Exception):
@@ -91,7 +100,8 @@ class UpdateInfo:
     notes: str                      # the release description (Markdown)
     page_url: str                   # the release's page on GitHub
     published: str = ""             # ISO time
-    deb_name: str = ""              # "" when the release has no .deb for us
+    deb_name: str = ""              # the package for this system (.deb, or the Windows zip);
+                                    # "" when the release has none
     deb_url: str = ""
     deb_size: int = 0
     sums_url: str = ""
@@ -112,7 +122,7 @@ def is_newer(info: UpdateInfo, current: str = __version__) -> bool:
     return compare_versions(info.version, current) > 0
 
 
-def parse_release(data) -> UpdateInfo:
+def parse_release(data, windows: Optional[bool] = None) -> UpdateInfo:
     """Read GitHub's "latest release" reply. Raises UpdateError if it isn't usable."""
     if not isinstance(data, dict):
         raise UpdateError("GitHub sent release information that couldn't be read.")
@@ -131,7 +141,7 @@ def parse_release(data) -> UpdateInfo:
     title = data.get("name") if isinstance(data.get("name"), str) and data.get("name").strip() else f"RBSB-Weather {version}"
     info = UpdateInfo(version=version, tag=tag, title=title.strip()[:200], notes=notes, page_url=page,
                       published=str(data.get("published_at") or "")[:40])
-    want = f"rbsb-weather_{version}_all.deb"
+    want = package_name(version, windows)
     for a in data.get("assets") or []:
         if not isinstance(a, dict):
             continue
@@ -301,7 +311,8 @@ class UpdateClient:
                             chunk = resp.read(CHUNK)
                             if not chunk:
                                 break
-                            if first and not chunk.startswith(DEB_MAGIC[:min(len(chunk), len(DEB_MAGIC))]):
+                            magic = ZIP_MAGIC if info.deb_name.endswith(".zip") else DEB_MAGIC
+                            if first and not chunk.startswith(magic[:min(len(chunk), len(magic))]):
                                 raise UpdateError("The download isn't an installer package, so it was deleted.")
                             first = False
                             done += len(chunk)

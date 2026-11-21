@@ -13,3 +13,4 @@ keys.json
 .env
 .env.*
 providers.json
+build/

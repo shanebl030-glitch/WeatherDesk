@@ -122,7 +122,11 @@ class UpdateDialog(QDialog):
         when = f" Published {info.published[:10]}." if info.published else ""
         size = f" Download: {_mb(info.deb_size)}." if info.deb_size else ""
         note = " You chose to skip this version; you can still install it here." if skipped else ""
-        if info.installable:
+        from .osplat import IS_WINDOWS
+        if info.installable and IS_WINDOWS:
+            how = (" It's downloaded to your Downloads folder and checked against its checksum; "
+                   "then you replace the program files with it.")
+        elif info.installable:
             how = (" It's downloaded to your Downloads folder, checked against its checksum, "
                    "then opened in your package installer (which asks for your password).")
         else:
@@ -154,6 +158,10 @@ class UpdateDialog(QDialog):
         self.progress.setTextVisible(total > 0)
 
     def show_downloaded(self, path: str, opened: bool) -> None:
+        from .osplat import IS_WINDOWS
+        if IS_WINDOWS or path.endswith(".zip"):
+            self._show_downloaded_zip(path, opened)
+            return
         self.downloading = False
         self._command = f"sudo apt install '{path}'"
         self.progress.setVisible(False)
@@ -167,6 +175,19 @@ class UpdateDialog(QDialog):
                    f"To install, run this in a terminal, then start {APP_NAME} again:\n\n{self._command}")
         self.detail.setText(msg)
         self._buttons(self.btn_copy)
+
+    def _show_downloaded_zip(self, path: str, opened: bool) -> None:
+        """Windows portable: the new version is replaced by hand once the app is closed."""
+        self.downloading = False
+        self.progress.setVisible(False)
+        self.headline.setText("<b>Downloaded and checked.</b>")
+        where = "It's selected in the Explorer window that just opened." if opened else ""
+        self.detail.setText(
+            f"Saved to {path}. {where}\n\nTo update: close {APP_NAME} (tray icon → Quit), then "
+            f"unzip this file into your {APP_NAME} folder and choose to replace the files. Your "
+            f"places and settings, in the RBSB-Weather-data folder, are kept. Then start "
+            f"RBSB-Weather.exe again.")
+        self._buttons()
 
     def show_download_failed(self, message: str) -> None:
         self.downloading = False

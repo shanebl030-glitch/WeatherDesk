@@ -478,7 +478,7 @@ class MainWindow(QMainWindow):
         v.addAction(self.act_widget)
         v.addSeparator()
         self.act_autostart = QAction("Start at &login (minimised)", self, checkable=True,
-                                     checked=autostart_path().exists(),
+                                     checked=self._autostart_on(),
                                      triggered=self.set_autostart)
         v.addAction(self.act_autostart)
 
@@ -1449,17 +1449,22 @@ class MainWindow(QMainWindow):
             self.set_show_tray(True)
         self.save_settings()
 
-    def set_autostart(self, on: bool) -> None:
-        p = autostart_path()
+    @staticmethod
+    def _autostart_on() -> bool:
+        from . import osplat
         try:
-            if on:
-                p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(AUTOSTART_ENTRY, encoding="utf-8")
-            elif p.exists():
-                p.unlink()
+            return osplat.autostart_enabled()
+        except Exception:
+            return False
+
+    def set_autostart(self, on: bool) -> None:
+        """View → Start at login: a .desktop file on Linux, the Run key on Windows (osplat.py)."""
+        from . import osplat
+        try:
+            osplat.set_autostart(on)
         except OSError as e:
             QMessageBox.warning(self, APP_NAME, f"Could not change the login setting:\n{e}")
-        self.act_autostart.setChecked(p.exists())
+        self.act_autostart.setChecked(self._autostart_on())
 
     # ================================================== Help / About
     def show_guide(self) -> None:
@@ -1782,6 +1787,11 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _open_with_desktop(path: str) -> bool:
+        """Linux: open the .deb in the package installer. Windows: show the portable zip in
+        Explorer (it's unzipped over the current folder once RBSB-Weather is closed)."""
+        from . import osplat
+        if osplat.IS_WINDOWS:
+            return osplat.show_in_file_manager(path)
         from PyQt6.QtCore import QUrl
         from PyQt6.QtGui import QDesktopServices
         return QDesktopServices.openUrl(QUrl.fromLocalFile(path))

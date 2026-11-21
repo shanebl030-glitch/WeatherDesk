@@ -191,6 +191,9 @@ def run() -> list[str]:
     """Startup entry point: migrate the real profile (unless disabled)."""
     if os.environ.get("RBSB_WEATHER_MIGRATE", "1") == "0":
         return []
+    from .osplat import IS_WINDOWS
+    if IS_WINDOWS:                     # WeatherDesk was never on Windows: nothing to carry over
+        return []
     if os.environ.get("RBSB_WEATHER_CONFIG_DIR") or os.environ.get("RBSB_WEATHER_CACHE_DIR"):
         return []
     from .storage import AUTOSTART_ENTRY, autostart_path, cache_dir, config_dir
@@ -230,4 +233,7 @@ def legacy_server_name() -> Optional[str]:
         return env or None
     if os.environ.get("RBSB_WEATHER_INSTANCE"):
         return None
-    return f"{LEGACY_ID}-{os.getuid()}"
+    from .osplat import IS_WINDOWS, user_id
+    if IS_WINDOWS:
+        return None
+    return f"{LEGACY_ID}-{user_id()}"

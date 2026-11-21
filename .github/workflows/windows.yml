@@ -1,0 +1,67 @@
+# RBSB-Weather for Windows: run the test suite and build the portable zip on a real
+# Windows machine (GitHub's windows-latest). Created By Shane BlackbuRn
+name: Windows build and tests
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python packages
+        run: python -m pip install --upgrade pip PyQt6 numpy keyring pyinstaller
+
+      - name: Show versions
+        run: python -c "import sys, PyQt6.QtCore as Q, numpy; print(sys.version); print('Qt', Q.QT_VERSION_STR, 'PyQt', Q.PYQT_VERSION_STR, 'numpy', numpy.__version__)"
+
+      - name: Test suite (Windows)
+        id: tests
+        continue-on-error: true
+        shell: bash
+        env:
+          PYTHON: python
+          QT_QPA_PLATFORM: offscreen
+          PYTHONIOENCODING: utf-8
+        run: ./run_tests.sh
+
+      - name: Build the portable zip
+        if: always()
+        run: python packaging/windows/build_windows.py
+
+      - name: Smoke test the built program
+        id: smoke
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: python packaging/windows/smoke_test.py dist/rbsb-weather-*-windows-portable.zip
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rbsb-weather-windows
+          path: |
+            dist/rbsb-weather-*-windows-portable.zip
+            dist/SHA256SUMS-windows
+            test-results.log
+          if-no-files-found: warn
+
+      - name: Fail if tests or smoke test failed
+        if: steps.tests.outcome == 'failure' || steps.smoke.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "tests: ${{ steps.tests.outcome }}, smoke test: ${{ steps.smoke.outcome }}"
+          exit 1

@@ -182,7 +182,10 @@ class KeyStore:
             return {}
         except OSError:
             return {}
-        if st.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+        from .osplat import IS_WINDOWS
+        # Windows has no Unix permission bits (every file reports 0o666); the file lives in
+        # the user's own folder, and the system keyring (Credential Manager) is used first
+        if not IS_WINDOWS and st.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
             # someone loosened the permissions: tighten them again before reading
             try:
                 os.chmod(self.path, 0o600)

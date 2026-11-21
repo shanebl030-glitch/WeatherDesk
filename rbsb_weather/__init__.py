@@ -5,7 +5,7 @@ Created By Shane BlackbuRn
 
 APP_NAME = "RBSB-Weather"
 APP_ID = "rbsb-weather"
-__version__ = "2.2.0"
+__version__ = "3.0.0"
 AUTHOR_CREDIT = "Created By Shane BlackbuRn"
 DATA_CREDIT = "Weather data by Open-Meteo.com (CC BY 4.0)"
 

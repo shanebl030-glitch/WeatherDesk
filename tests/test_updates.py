@@ -53,6 +53,7 @@ class FakeGitHub:
         self.requests: list[str] = []
         self.deb_gets = 0
         self.slow_deb = 0.0
+        self.windows = False             # serve the Windows portable zip as the package
         outer = self
 
         class H(http.server.BaseHTTPRequestHandler):
@@ -86,7 +87,7 @@ class FakeGitHub:
                     self.send_header("Location", target)
                     self.send_header("Content-Length", "0")
                     self.end_headers()
-                elif self.path == f"/cdn/{DEB_NAME}" or self.path == f"/cdn/rbsb-weather_{outer.version}_all.deb":
+                elif self.path.startswith("/cdn/") and self.path != "/cdn/SHA256SUMS":
                     outer.deb_gets += 1
                     self.send_response(200)
                     self.send_header("Content-Type", "application/octet-stream")
@@ -101,7 +102,7 @@ class FakeGitHub:
                         pass
                 elif self.path == "/cdn/SHA256SUMS":
                     text = outer.sums if outer.sums is not None else \
-                        f"{hashlib.sha256(outer.deb).hexdigest()}  rbsb-weather_{outer.version}_all.deb\n" \
+                        f"{hashlib.sha256(outer.deb).hexdigest()}  {outer.package_name()}\n" \
                         f"{'0' * 64}  rbsb-weather-{outer.version}-source.tar.gz\n"
                     self._send(200, text.encode(), ctype="text/plain")
                 else:
@@ -113,9 +114,12 @@ class FakeGitHub:
         self.url = f"http://127.0.0.1:{self.port}/repos/shanebl030-glitch/RBSB-Weather/releases/latest"
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
 
+    def package_name(self) -> str:
+        return updates.package_name(self.version, self.windows)
+
     def release_json(self) -> dict:
         base = f"http://127.0.0.1:{self.port}/download/"
-        deb = f"rbsb-weather_{self.version}_all.deb"
+        deb = self.package_name()
         return {
             "tag_name": f"v{self.version}", "name": f"RBSB-Weather {self.version}",
             "html_url": f"https://github.com/shanebl030-glitch/RBSB-Weather/releases/tag/v{self.version}",
